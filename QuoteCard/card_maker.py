@@ -1,5 +1,5 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import json
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 
 class CardMaker:
@@ -10,45 +10,54 @@ class CardMaker:
     def create_card(self, output_path):
         # 加载封面图片并应用模糊滤镜
         cover_image = Image.open(self.data["book_cover"])
-        cover_image = cover_image.filter(ImageFilter.GaussianBlur(10))  # 增加的模糊效果
+        cover_image = cover_image.filter(ImageFilter.GaussianBlur(40))
 
-        # 调整封面图片到卡片的大小，并用作背景
-        cover_image = cover_image.resize((800, 600))
+        # 计算合适的尺寸以填充背景
+        width, height = cover_image.size
+        target_width, target_height = 800, 600
+        ratio = max(target_width / width, target_height / height)
+        new_size = (int(width * ratio), int(height * ratio))
+        cover_image = cover_image.resize(new_size, Image.Resampling.LANCZOS)
+
+        # 如果尺寸不匹配，则进行裁剪
+        if new_size[0] != target_width or new_size[1] != target_height:
+            cover_image = self.crop_to_fit(cover_image, target_width, target_height)
 
         # 创建一个同样大小的图像用于绘画
         img = Image.new("RGB", (800, 600))
-        img.paste(cover_image)  # 使用模糊后的封面图片作为背景
+        img.paste(cover_image)
+
+        # 继续之前的步骤
         d = ImageDraw.Draw(img)
         font = ImageFont.truetype(self.font_path, 24)
 
-        # 绘制“引用内容”，这里不再绘制边框
-        d.text(
-            (60, 50), self.data["quote"], fill=(255, 255, 255), font=font
-        )  # text color changed to white for visibility
+        # 添加文本和图片，文本颜色改为白色提高对比度
+        d.text((60, 50), self.data["quote"], fill="black", font=font)
+        d.text((610, 240), self.data["speaker"], fill="black", font=font)
 
-        # 绘制发言人名称，不再绘制边框
-        d.text(
-            (610, 240), self.data["speaker"], fill=(255, 255, 255), font=font
-        )  # text color changed to white for visibility
+        # 粘贴书籍封面的缩略图
+        cover_thumbnail = Image.open(self.data["book_cover"])
+        cover_thumbnail.thumbnail((150, 200))
+        img.paste(cover_thumbnail, (50, 290), cover_thumbnail.convert("RGBA"))
 
-        # 缩小并粘贴封面图片到指定位置
-        cover_image_small = Image.open(self.data["book_cover"])
-        cover_image_small.thumbnail((150, 200))
-        img.paste(
-            cover_image_small, (50, 290), cover_image_small.convert("RGBA")
-        )  # Use alpha channel for pasting
-
-        # 绘制书籍信息, 不再绘制边框
+        # 添加书籍信息文本
         d.multiline_text(
-            (220, 300),
-            self.data["book_info"],
-            fill=(255, 255, 255),
-            font=font,
-            spacing=5,
-        )  # text color changed to white for visibility
+            (220, 300), self.data["book_info"], fill="black", font=font, spacing=5
+        )
 
         # 保存图像
         img.save(output_path)
+
+    def crop_to_fit(self, image, target_width, target_height):
+        """
+        图片按比例缩放后，如果不符合目标尺寸，则从中间裁剪到目标大小。
+        """
+        width, height = image.size
+        top = (height - target_height) // 2
+        left = (width - target_width) // 2
+        right = (width + target_width) // 2
+        bottom = (height + target_height) // 2
+        return image.crop((left, top, right, bottom))
 
 
 if __name__ == "__main__":
@@ -57,11 +66,11 @@ if __name__ == "__main__":
     {
         "quote": "这里是引用的内容...",
         "speaker": "发言人姓名",
-        "book_cover": "book_cover.jpg",
-        "book_info": "书名\n作者\n出版社"
+        "book_cover": "QuoteCard/classroom-of-the-elite.webp",
+        "book_info": "书名 作者 出版社"
     }
     """
-    font_path = "path_to_your_font_file.ttf"
+    font_path = "fonts/SourceHanSansSC-VF.ttf"
 
     # 创建CardMaker实例
     card_maker = CardMaker(json_data, font_path)
